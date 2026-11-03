@@ -4,7 +4,7 @@ import numpy as np
 import pyautogui
 import time
 import os
-
+import random
 # --- CẤU HÌNH ---
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.2 
@@ -31,13 +31,33 @@ def find_and_click(template, monitor_region, threshold=0.8):
         result = cv2.matchTemplate(frame, temp, cv2.TM_CCOEFF_NORMED)
         loc = np.where(result >= threshold)
         
+        # Đoạn code trong hàm find_and_click
         for pt in zip(*loc[::-1]):
             h, w = temp.shape[:2]
-            center_x = monitor_region["left"] + pt[0] + w // 2
-            center_y = monitor_region["top"] + pt[1] + h // 2
-            pyautogui.click(x=center_x, y=center_y)
+            
+            # Cố tình click lệch ra khỏi tâm ảnh vài pixel (Tránh việc 1000 lần click đúng 1 điểm)
+            offset_x = random.randint(-w // 4, w // 4)
+            offset_y = random.randint(-h // 4, h // 4)
+            
+            target_x = monitor_region["left"] + pt[0] + (w // 2) + offset_x
+            target_y = monitor_region["top"] + pt[1] + (h // 2) + offset_y
+            
+            # 1. Lướt chuột đến đích với thời gian ngẫu nhiên
+            pyautogui.moveTo(target_x, target_y, duration=random.uniform(0.15, 0.35))
+            time.sleep(random.uniform(0.05, 0.15))
+            
+            # 2. Nhấn chuột xuống (Bắt đầu click)
+            pyautogui.mouseDown()
+            
+            # 3. KỸ THUẬT RUNG TAY: Xê dịch chuột 1-2 pixel trong lúc đang giữ chuột
+            rung_x = random.choice([-2, -1, 1, 2])
+            rung_y = random.choice([-2, -1, 1, 2])
+            pyautogui.moveTo(target_x + rung_x, target_y + rung_y, duration=random.uniform(0.02, 0.08))
+            
+            # 4. Nhả chuột ra (Kết thúc click)
+            pyautogui.mouseUp()
+            
             return True
-    return False
 
 def check_exists(template, monitor_region, threshold=0.8):
     """Quét xem ảnh có tồn tại trên màn hình không (KHÔNG CLICK)"""
@@ -74,8 +94,10 @@ def main():
     
     choice = input("Nhập lựa chọn (0/1/2/3): ").strip()
     
+    # NẠP ẢNH TÁC VỤ CHUNG (Global)
     claim_img = load_image('claim_btn.png')
-    full_img = load_image('inventory_full.png') # Ảnh báo lỗi
+    full_img = load_image('inventory_full.png')
+    refresh_img = load_image('refresh_btn.png') # Nút Làm mới giờ dùng chung cho mọi chế độ
     
     last_refresh_time = 0 
     
@@ -83,13 +105,11 @@ def main():
         task_img = load_image('scav_btn.png')
         confirm_img = load_image('start_btn.png')
         input_box = load_image('input_box.png')
-        refresh_img = load_image('refresh_btn.png')
         task_name = "Thu Thập AFK"
         
     elif choice == '2':
         task_img = load_image('botfarm_btn.png')
         confirm_img = load_image('start_btn.png')
-        refresh_img = load_image('refresh_btn.png')
         task_name = "Triển Khai Bot"
         
     elif choice == '3':
@@ -111,25 +131,31 @@ def main():
 
     while True:
         try:
-            # Ưu tiên 0: Lấy tất cả và Kiểm tra Rương
+            # --- ƯU TIÊN 0: Lấy tất cả & Kiểm tra rương đầy ---
             if find_and_click(claim_img, MONITOR, threshold=THRESHOLD):
                 print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm nhận thưởng, đang kiểm tra...")
-                time.sleep(0.5) # Đợi game hiển thị thông báo lỗi (nếu có)
+                time.sleep(0.5) 
                 
-                # Quét màn hình tìm dòng chữ báo rương đầy
                 if check_exists(full_img, MONITOR, threshold=THRESHOLD):
                     print("\n" + "!"*50)
                     print(f"[{time.strftime('%H:%M:%S')}] [!!!] BÁO ĐỘNG: ĐÃ MAX THÀNH PHẨM (RƯƠNG ĐẦY)!")
                     print("[!] Đang tự động ngắt tool để bảo vệ an toàn...")
                     print("!"*50 + "\n")
-                    
                     import winsound
-                    winsound.Beep(1000, 1500) # Kêu Bíp 1.5s
-                    break # Thoát hoàn toàn tool
+                    winsound.Beep(1000, 1500) 
+                    break 
                 
-                time.sleep(1.5) # Nhận thưởng thành công thì chờ tiếp
-            
-            # XỬ LÝ CHẾ ĐỘ 1 & 2
+                time.sleep(1.5) 
+
+            # --- ƯU TIÊN 1 (TOÀN CỤC): Làm mới thủ công chống kẹt ---
+            if time.time() - last_refresh_time > 60:
+                if find_and_click(refresh_img, MONITOR, threshold=THRESHOLD):
+                    print(f"[{time.strftime('%H:%M:%S')}] [*] Đã bấm Làm mới thủ công (chống kẹt).")
+                    last_refresh_time = time.time()
+                    time.sleep(1)
+                    continue # Nếu vừa bấm làm mới, quay lại từ đầu vòng lặp để ưu tiên check Claim ngay
+
+            # --- XỬ LÝ CHẾ ĐỘ 1 & 2 ---
             if choice in ['1', '2']:
                 if find_and_click(confirm_img, MONITOR, threshold=THRESHOLD):
                     print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm BẮT ĐẦU!")
@@ -146,14 +172,8 @@ def main():
                             pyautogui.press('backspace')
                             pyautogui.write('10')
                             time.sleep(0.5)
-                            
-                elif time.time() - last_refresh_time > 60:
-                    if find_and_click(refresh_img, MONITOR, threshold=THRESHOLD):
-                        print(f"[{time.strftime('%H:%M:%S')}] [*] Đã bấm Làm mới thủ công (chống kẹt).")
-                        last_refresh_time = time.time()
-                        time.sleep(1)
 
-            # XỬ LÝ CHẾ ĐỘ 3
+            # --- XỬ LÝ CHẾ ĐỘ 3 ---
             elif choice == '3':
                 if find_and_click(tc_auto, MONITOR, threshold=THRESHOLD):
                     print(f"\n[{time.strftime('%H:%M:%S')}] [*] Kích hoạt chuỗi Tái Chế...")
