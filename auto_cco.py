@@ -50,6 +50,26 @@ def move_mouse_bezier(dest_x, dest_y, duration=0.25):
         
     pyautogui.moveTo(dest_x, dest_y, _pause=False)
 
+def human_scroll(scroll_amount=-500):
+    """
+    Giả lập lăn chuột người thật. 
+    - scroll_amount âm (< 0): Lăn xuống
+    - scroll_amount dương (> 0): Lăn lên
+    """
+    # 1. Đưa chuột ra giữa màn hình để đảm bảo cuộn đúng cửa sổ game
+    center_x = MONITOR["left"] + MONITOR["width"] // 2
+    center_y = MONITOR["top"] + MONITOR["height"] // 2
+    move_mouse_bezier(center_x, center_y, duration=0.2)
+    time.sleep(random.uniform(0.1, 0.2))
+    
+    # 2. Chia nhỏ vòng lăn chuột
+    steps = random.randint(4, 7)
+    step_scroll = scroll_amount // steps
+    
+    for _ in range(steps):
+        pyautogui.scroll(step_scroll)
+        time.sleep(random.uniform(0.05, 0.15))
+
 def find_and_click(template, monitor_region, threshold=0.85):
     with mss.mss() as sct:
         img = np.array(sct.grab(monitor_region))
@@ -109,11 +129,13 @@ def main():
     print("2. Triển Khai Bot Nông XP")
     print("3. Tái Chế Tự Động (1000)")
     print("4. Mở Khóa Container (Hòm)")
+    print("5. Chạy EGMS (Có lăn chuột)")
     print("0. Thoát")
     print("-" * 40)
     
-    choice = input("Nhập lựa chọn (0/1/2/3/4): ").strip()
+    choice = input("Nhập lựa chọn (0/1/2/3/4/5): ").strip()
     
+    # --- TẢI ẢNH CHUNG ---
     claim_img = load_image('claim_btn.png')
     full_img = load_image('inventory_full.png')
     refresh_img = load_image('refresh_btn.png')
@@ -149,7 +171,6 @@ def main():
         print("-" * 30)
         
         sub_choice = input("Nhập loại hòm (1/2/3): ").strip()
-        
         c_dashboard = load_image('dashboard_btn.png')
         c_menu = load_image('unlock_container_menu.png')
         c_select = load_image('select_chest_btn.png')
@@ -168,9 +189,14 @@ def main():
             exit(1)
             
         c_unlock = load_image('unlock_action_btn.png')
-        # Tận dụng luôn ảnh nút Bắt Đầu của chế độ 1, 2
         c_start = load_image('start_btn.png') 
         
+    elif choice == '5':
+        trigger_img = load_image('trigger_scroll.png') # Kí tự điểm neo
+        egms_img = load_image('egms_btn.png')
+        confirm_img = load_image('start_btn.png')
+        task_name = "Chạy EGMS"
+
     elif choice == '0':
         exit(0)
     else:
@@ -181,7 +207,7 @@ def main():
 
     while True:
         try:
-            # --- ƯU TIÊN 0: Lấy tất cả & Kiểm tra rương đầy ---
+            # --- ƯU TIÊN 0: Lấy tất cả (Nhận) & Kiểm tra rương đầy ---
             if find_and_click(claim_img, MONITOR, threshold=THRESHOLD):
                 print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm Nhận/Lấy tất cả, đang kiểm tra...")
                 time.sleep(0.3) 
@@ -238,30 +264,45 @@ def main():
                                 time.sleep(0.05)
                                 pyautogui.press('backspace')
                                 pyautogui.write('1000') 
-                                print(f"[{time.strftime('%H:%M:%S')}] [>] Đã gõ: 1000")
                                 time.sleep(0.3)
                                 if wait_and_click_step(tc_xacnhan, MONITOR, "Xác Nhận", timeout=3):
                                     time.sleep(0.5)
                                     wait_and_click_step(tc_confirm, MONITOR, "Tái Chế Cuối", timeout=3)
-                                    print(f"[{time.strftime('%H:%M:%S')}] [V] HOÀN THÀNH 1 VÒNG TÁI CHẾ!\n")
 
-            # --- XỬ LÝ CHẾ ĐỘ 4 (MỞ CONTAINER THEO LOẠI ĐÃ CHỌN) ---
+            # --- XỬ LÝ CHẾ ĐỘ 4 ---
             elif choice == '4':
                 if find_and_click(c_dashboard, MONITOR, threshold=THRESHOLD):
                     print(f"\n[{time.strftime('%H:%M:%S')}] [*] Mở Bảng điều khiển...")
                     time.sleep(0.5)
                     if wait_and_click_step(c_menu, MONITOR, "Mở khóa container", timeout=3):
-                        time.sleep(0.5)
+                        time.sleep(0.3)
                         if wait_and_click_step(c_select, MONITOR, "Chọn rương", timeout=3):
-                            time.sleep(0.5)
+                            time.sleep(0.3)
                             if wait_and_click_step(c_option, MONITOR, f"Chọn {task_name}", timeout=3):
-                                time.sleep(0.5)
+                                time.sleep(0.3)
                                 if wait_and_click_step(c_unlock, MONITOR, "Mở khóa", timeout=3):
-                                    time.sleep(0.5)
-                                    # --- Bổ sung bước nhấn Bắt Đầu ở đây ---
+                                    time.sleep(0.3)
                                     if wait_and_click_step(c_start, MONITOR, "Xác nhận Bắt đầu", timeout=3):
                                         print(f"[{time.strftime('%H:%M:%S')}] [V] Đã bấm Bắt đầu! Đang chờ Nhận...")
                                         time.sleep(0.5)
+
+            # --- XỬ LÝ CHẾ ĐỘ 5 (EGMS - CÓ ĐIỂM NEO) ---
+            elif choice == '5':
+                # 1. Bot đứng yên quét màn hình, chỉ khi thấy "kí tự neo" mới lăn chuột
+                if check_exists(trigger_img, MONITOR, threshold=THRESHOLD):
+                    print(f"[{time.strftime('%H:%M:%S')}] [*] Đã thấy điểm neo! Kích hoạt cuộn chuột...")
+                    human_scroll(-350) # Lăn xuống
+                    time.sleep(0.8) # Chờ web load hình ảnh
+                    
+                    # 2. Quét và bấm EGMS ở nửa dưới màn hình
+                    if find_and_click(egms_img, MONITOR, threshold=THRESHOLD):
+                        print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm vào EGMS!")
+                        time.sleep(0.8)
+                        
+                        # 3. Bấm nút Bắt Đầu
+                        if wait_and_click_step(confirm_img, MONITOR, "Xác nhận Bắt đầu", timeout=3):
+                            print(f"[{time.strftime('%H:%M:%S')}] [V] Đã bấm Bắt đầu EGMS! Đang chờ Nhận...")
+                            time.sleep(0.5)
             
             time.sleep(0.3)
             
