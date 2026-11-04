@@ -8,7 +8,7 @@ import random
 
 # --- CẤU HÌNH BẢO MẬT & TỐC ĐỘ ---
 pyautogui.FAILSAFE = True
-pyautogui.PAUSE = 0.05  # Giảm độ trễ mặc định của PyAutoGUI xuống tối đa
+pyautogui.PAUSE = 0.05  
 THRESHOLD = 0.85 
 
 MONITOR = {"top": 0, "left": 0, "width": 1920, "height": 1080}
@@ -24,7 +24,7 @@ def load_image(filename):
     return img
 
 def move_mouse_bezier(dest_x, dest_y, duration=0.25):
-    """Đường cong Bezier tối ưu tốc độ (Chỉ 12 steps để tránh lag Windows)"""
+    """Đường cong Bezier tối ưu tốc độ (12 steps)"""
     start_x, start_y = pyautogui.position()
     
     distance = ((dest_x - start_x)**2 + (dest_y - start_y)**2)**0.5
@@ -38,7 +38,7 @@ def move_mouse_bezier(dest_x, dest_y, duration=0.25):
     cp2_x = start_x + (dest_x - start_x) * 0.7 + random.randint(-offset, offset)
     cp2_y = start_y + (dest_y - start_y) * 0.7 + random.randint(-offset, offset)
     
-    steps = 12 # Tối ưu: 12 bước giúp di chuyển siêu nhanh mà vẫn giữ độ cong
+    steps = 12 
     sleep_time = duration / steps
     
     for i in range(1, steps + 1):
@@ -62,17 +62,14 @@ def find_and_click(template, monitor_region, threshold=0.85):
         for pt in zip(*loc[::-1]):
             h, w = temp.shape[:2]
             
-            # Sai số tâm điểm
             offset_x = random.randint(-w // 4, w // 4)
             offset_y = random.randint(-h // 4, h // 4)
             target_x = monitor_region["left"] + pt[0] + (w // 2) + offset_x
             target_y = monitor_region["top"] + pt[1] + (h // 2) + offset_y
             
-            # Rê chuột đường cong tốc độ cao (0.15 - 0.25s)
             move_mouse_bezier(target_x, target_y, duration=random.uniform(0.15, 0.25))
             time.sleep(random.uniform(0.02, 0.05))
             
-            # Click kèm rung nhẹ chống Anti-Bot
             pyautogui.mouseDown(_pause=False)
             rung_x = random.choice([-1, 1])
             rung_y = random.choice([-1, 1])
@@ -83,7 +80,6 @@ def find_and_click(template, monitor_region, threshold=0.85):
     return False
 
 def check_exists(template, monitor_region, threshold=0.85):
-    """Quét siêu tốc xem ảnh có tồn tại trên màn hình không (KHÔNG CLICK)"""
     with mss.mss() as sct:
         img = np.array(sct.grab(monitor_region))
         frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR) if img.shape[2] == 4 else img
@@ -107,15 +103,16 @@ def wait_and_click_step(template, monitor_region, step_name, timeout=3):
 
 def main():
     print("="*40)
-    print("    TOOL AUTO CYBERCODE ONLINE (SIÊU TỐC)")
+    print("    TOOL AUTO CYBERCODE ONLINE")
     print("="*40)
     print("1. Thu Thập AFK")
     print("2. Triển Khai Bot Nông XP")
     print("3. Tái Chế Tự Động (1000)")
+    print("4. Mở Khóa Container (Hòm)")
     print("0. Thoát")
     print("-" * 40)
     
-    choice = input("Nhập lựa chọn (0/1/2/3): ").strip()
+    choice = input("Nhập lựa chọn (0/1/2/3/4): ").strip()
     
     claim_img = load_image('claim_btn.png')
     full_img = load_image('inventory_full.png')
@@ -142,6 +139,37 @@ def main():
         tc_xacnhan = load_image('xac_nhan.png')
         tc_confirm = load_image('taiche_confirm.png')
         task_name = "Chuỗi Tái Chế Tự Động"
+
+    elif choice == '4':
+        print("\n" + "-"*30)
+        print(" CHỌN LOẠI HÒM CẦN MỞ TỰ ĐỘNG:")
+        print(" 1. Hòm Đồ Bị Khóa (Thường)")
+        print(" 2. Hòm Đồ Bị Khóa - Hiếm")
+        print(" 3. Hòm Đồ Bị Khóa - Huyền Thoại")
+        print("-" * 30)
+        
+        sub_choice = input("Nhập loại hòm (1/2/3): ").strip()
+        
+        c_dashboard = load_image('dashboard_btn.png')
+        c_menu = load_image('unlock_container_menu.png')
+        c_select = load_image('select_chest_btn.png')
+        
+        if sub_choice == '1':
+            c_option = load_image('hom_thuong.png')
+            task_name = "Mở Hòm Thường"
+        elif sub_choice == '2':
+            c_option = load_image('hom_hiem.png')
+            task_name = "Mở Hòm Hiếm"
+        elif sub_choice == '3':
+            c_option = load_image('hom_huyenthoai.png')
+            task_name = "Mở Hòm Huyền Thoại"
+        else:
+            print("[!] Lựa chọn hòm không hợp lệ.")
+            exit(1)
+            
+        c_unlock = load_image('unlock_action_btn.png')
+        # Tận dụng luôn ảnh nút Bắt Đầu của chế độ 1, 2
+        c_start = load_image('start_btn.png') 
         
     elif choice == '0':
         exit(0)
@@ -155,7 +183,7 @@ def main():
         try:
             # --- ƯU TIÊN 0: Lấy tất cả & Kiểm tra rương đầy ---
             if find_and_click(claim_img, MONITOR, threshold=THRESHOLD):
-                print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm nhận thưởng, đang kiểm tra...")
+                print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm Nhận/Lấy tất cả, đang kiểm tra...")
                 time.sleep(0.3) 
                 
                 if check_exists(full_img, MONITOR, threshold=THRESHOLD):
@@ -216,6 +244,24 @@ def main():
                                     time.sleep(0.5)
                                     wait_and_click_step(tc_confirm, MONITOR, "Tái Chế Cuối", timeout=3)
                                     print(f"[{time.strftime('%H:%M:%S')}] [V] HOÀN THÀNH 1 VÒNG TÁI CHẾ!\n")
+
+            # --- XỬ LÝ CHẾ ĐỘ 4 (MỞ CONTAINER THEO LOẠI ĐÃ CHỌN) ---
+            elif choice == '4':
+                if find_and_click(c_dashboard, MONITOR, threshold=THRESHOLD):
+                    print(f"\n[{time.strftime('%H:%M:%S')}] [*] Mở Bảng điều khiển...")
+                    time.sleep(0.5)
+                    if wait_and_click_step(c_menu, MONITOR, "Mở khóa container", timeout=3):
+                        time.sleep(0.5)
+                        if wait_and_click_step(c_select, MONITOR, "Chọn rương", timeout=3):
+                            time.sleep(0.5)
+                            if wait_and_click_step(c_option, MONITOR, f"Chọn {task_name}", timeout=3):
+                                time.sleep(0.5)
+                                if wait_and_click_step(c_unlock, MONITOR, "Mở khóa", timeout=3):
+                                    time.sleep(0.5)
+                                    # --- Bổ sung bước nhấn Bắt Đầu ở đây ---
+                                    if wait_and_click_step(c_start, MONITOR, "Xác nhận Bắt đầu", timeout=3):
+                                        print(f"[{time.strftime('%H:%M:%S')}] [V] Đã bấm Bắt đầu! Đang chờ Nhận...")
+                                        time.sleep(0.5)
             
             time.sleep(0.3)
             
