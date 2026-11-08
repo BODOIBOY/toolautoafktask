@@ -5,6 +5,7 @@ import pyautogui
 import time
 import os
 import random
+import keyboard  # <-- Thư viện mới để nhận diện phím tắt
 
 # --- CẤU HÌNH BẢO MẬT & TỐC ĐỘ ---
 pyautogui.FAILSAFE = True
@@ -12,6 +13,18 @@ pyautogui.PAUSE = 0.05
 THRESHOLD = 0.85 
 
 MONITOR = {"top": 0, "left": 0, "width": 1920, "height": 1080}
+
+# --- BIẾN TRẠNG THÁI TẠM DỪNG ---
+is_paused = False
+
+def toggle_pause():
+    """Hàm bật/tắt trạng thái tạm dừng khi nhấn F9"""
+    global is_paused
+    is_paused = not is_paused
+    if is_paused:
+        print(f"\n[{time.strftime('%H:%M:%S')}] [II] ĐÃ TẠM DỪNG TOOL! (Nhấn F9 để chạy tiếp)")
+    else:
+        print(f"\n[{time.strftime('%H:%M:%S')}] [>] TIẾP TỤC CHẠY!")
 
 def load_image(filename):
     if not os.path.exists(filename):
@@ -108,6 +121,10 @@ def check_exists(template, monitor_region, threshold=0.85):
 def wait_and_click_step(template, monitor_region, step_name, timeout=3):
     start_time = time.time()
     while time.time() - start_time < timeout:
+        # Nếu đang trong lúc chờ mà người dùng bấm F9, thì thoái thác chờ đợi
+        if is_paused:
+            return False
+            
         if find_and_click(template, monitor_region, threshold=THRESHOLD):
             print(f"[{time.strftime('%H:%M:%S')}] [>] Đã hoàn thành bước: {step_name}")
             return True
@@ -191,7 +208,6 @@ def main():
         confirm_img = load_image('start_btn.png')
         task_name = "Chạy EGMS"
         
-    # --- CÁC CHẾ ĐỘ EXP MỚI ---
     elif choice == '6':
         task_img = load_image('exp_in.png')
         confirm_img = load_image('start_btn.png')
@@ -211,10 +227,19 @@ def main():
         exit(1)
 
     print(f"\n>>> BẮT ĐẦU: {task_name.upper()} <<<")
-    print("ÉP GÓC CHUỘT ĐỂ DỪNG KHẨN CẤP!\n")
+    print("[-] ÉP GÓC CHUỘT: Dừng khẩn cấp (Tắt tool)")
+    print("[-] NHẤN PHÍM F9: Tạm dừng / Tiếp tục chạy\n")
+    
+    # Kích hoạt lắng nghe phím F9 chạy ngầm
+    keyboard.add_hotkey('f9', toggle_pause)
 
     while True:
         try:
+            # --- KIỂM TRA TRẠNG THÁI TẠM DỪNG ---
+            if is_paused:
+                time.sleep(0.5) # Ngủ 0.5s để tiết kiệm CPU, không làm gì cả
+                continue
+                
             # --- ƯU TIÊN 0: Lấy tất cả (Nhận) & Kiểm tra rương đầy ---
             if find_and_click(claim_img, MONITOR, threshold=THRESHOLD):
                 print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm Nhận/Lấy tất cả, đang kiểm tra...")
@@ -315,7 +340,7 @@ def main():
             time.sleep(0.3)
             
         except pyautogui.FailSafeException:
-            print(f"\n[{time.strftime('%H:%M:%S')}] [!] Đã ngắt Tool bằng chuột!")
+            print(f"\n[{time.strftime('%H:%M:%S')}] [!] Đã ngắt Tool bằng chuột (Failsafe)!")
             break
 
 if __name__ == "__main__":
