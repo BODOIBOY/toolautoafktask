@@ -64,6 +64,12 @@ def move_mouse_bezier(dest_x, dest_y, duration=0.25):
         
     pyautogui.moveTo(dest_x, dest_y, _pause=False)
 
+def unhover_mouse():
+    """Dời chuột ra lề trống an toàn để tránh hiệu ứng :hover làm đổi màu nút Claim"""
+    safe_x = MONITOR["left"] + random.randint(60, 120)
+    safe_y = MONITOR["top"] + random.randint(250, 420)
+    move_mouse_bezier(safe_x, safe_y, duration=0.15)
+
 def human_scroll(scroll_amount=-500):
     """Giả lập lăn chuột người thật"""
     center_x = MONITOR["left"] + MONITOR["width"] // 2
@@ -164,8 +170,8 @@ def wait_and_click_step(template, monitor_region, step_name, timeout=3):
     print(f"[{time.strftime('%H:%M:%S')}] [!] Thất bại, không tìm thấy: {step_name}")
     return False
 
-def ensure_material_tab_active(bright_template, dark_template, monitor_region, threshold=0.82):
-    """Kiểm tra trạng thái nút Material: sáng thì bỏ qua, tối thì mới bấm."""
+def ensure_tab_active(bright_template, dark_template, tab_name, monitor_region, threshold=0.82):
+    """Kiểm tra trạng thái nút tab (Chế tạo / Material): sáng thì bỏ qua, tối thì mới bấm."""
     with mss.mss() as sct:
         img = np.array(sct.grab(monitor_region))
         frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR) if img.shape[2] == 4 else img
@@ -180,7 +186,7 @@ def ensure_material_tab_active(bright_template, dark_template, monitor_region, t
     _, max_val_bright, _, max_loc_bright = cv2.minMaxLoc(res_bright)
 
     if max(max_val_dark, max_val_bright) < threshold:
-        print(f"[{time.strftime('%H:%M:%S')}] [!] Không tìm thấy nút Material trên màn hình.")
+        print(f"[{time.strftime('%H:%M:%S')}] [!] Không tìm thấy nút {tab_name} trên màn hình.")
         return False
 
     if max_val_dark >= max_val_bright:
@@ -190,7 +196,6 @@ def ensure_material_tab_active(bright_template, dark_template, monitor_region, t
         pt = max_loc_bright
         h, w = bright_bgr.shape[:2]
 
-    # Đo độ sáng phần chữ (percentile 90) để không bị lệch do kích thước khung cắt ảnh
     roi_gray = cv2.cvtColor(frame[pt[1]:pt[1]+h, pt[0]:pt[0]+w], cv2.COLOR_BGR2GRAY)
     bright_gray = cv2.cvtColor(bright_bgr, cv2.COLOR_BGR2GRAY)
     dark_gray = cv2.cvtColor(dark_bgr, cv2.COLOR_BGR2GRAY)
@@ -200,10 +205,10 @@ def ensure_material_tab_active(bright_template, dark_template, monitor_region, t
     dark_ref_lum = np.percentile(dark_gray, 90)
 
     if abs(current_text_lum - bright_ref_lum) <= abs(current_text_lum - dark_ref_lum):
-        print(f"[{time.strftime('%H:%M:%S')}] [>] Nút Material đang SÁNG sẵn, không cần bấm.")
+        print(f"[{time.strftime('%H:%M:%S')}] [>] Nút {tab_name} đang SÁNG sẵn, không cần bấm.")
         return True
     else:
-        print(f"[{time.strftime('%H:%M:%S')}] [*] Nút Material đang TỐI, tiến hành bấm...")
+        print(f"[{time.strftime('%H:%M:%S')}] [*] Nút {tab_name} đang TỐI, tiến hành bấm...")
         offset_x = random.randint(-w // 4, w // 4)
         offset_y = random.randint(-h // 4, h // 4)
         target_x = monitor_region["left"] + pt[0] + (w // 2) + offset_x
@@ -214,7 +219,7 @@ def ensure_material_tab_active(bright_template, dark_template, monitor_region, t
         pyautogui.mouseDown(_pause=False)
         pyautogui.moveTo(target_x + random.choice([-1, 1]), target_y + random.choice([-1, 1]), duration=0.02, _pause=False)
         pyautogui.mouseUp(_pause=False)
-        print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm chọn tab Material.")
+        print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm chọn tab {tab_name}.")
         time.sleep(0.4)
         return True
 
@@ -238,6 +243,7 @@ def execute_recycle_once(tc_auto, tc_plus, tc_vattu, tc_input, tc_xacnhan, tc_co
                     if wait_and_click_step(tc_xacnhan, MONITOR, "Xác Nhận", timeout=3):
                         time.sleep(0.5)
                         if wait_and_click_step(tc_confirm, MONITOR, "Tái Chế Cuối", timeout=3):
+                            unhover_mouse()
                             return True
     return False
 
@@ -249,57 +255,37 @@ def execute_craft_bag_once(lee_shop_img, old_bag_img, confirm_img):
         if wait_and_click_step(old_bag_img, MONITOR, "Chọn Túi cũ", timeout=3):
             time.sleep(0.3)
             if wait_and_click_step(confirm_img, MONITOR, "Xác nhận Start", timeout=3):
+                unhover_mouse()
                 return True
     elif find_and_click(old_bag_img, MONITOR, threshold=THRESHOLD):
         print(f"\n[{time.strftime('%H:%M:%S')}] [*] Chọn Túi cũ...")
         time.sleep(0.3)
         if wait_and_click_step(confirm_img, MONITOR, "Xác nhận Start", timeout=3):
+            unhover_mouse()
             return True
     return False
 
-def execute_post_craft_sequence(inventory_img, material_bright_img, material_dark_img, craft_vattu_img, hide_uncraftable_img, craft_input_box, max_btn_img, confirm_img, claim_img, map_img, tap_doan_img):
-    """Chuỗi sau 4 lần Craft: Túi đồ (Inventory) -> Material -> Vật tư y tế -> Set 8 -> Bắt đầu -> Bản đồ -> Tập đoàn"""
+def execute_post_craft_sequence(inventory_img, che_tao_bright_img, che_tao_dark_img, material_bright_img, material_dark_img, craft_vattu_img, hide_uncraftable_img, craft_input_box, max_btn_img, confirm_img, map_img, tap_doan_img):
+    """Chuỗi sau 4 lần Craft: Túi đồ (Inventory) -> Chế tạo -> Material -> Vật tư y tế (Set 8) -> Bắt đầu -> Bản đồ -> Tập đoàn"""
     print(f"\n[{time.strftime('%H:%M:%S')}] [*] Chạy tiến trình sau 4 lần Craft...")
-    if wait_and_click_step(inventory_img, MONITOR, "Túi đồ (Inventory)", timeout=3):
+    if wait_and_click_step(inventory_img, MONITOR, "Túi đồ (Inventory)", timeout=4):
         time.sleep(0.5)
-        if ensure_material_tab_active(material_bright_img, material_dark_img, MONITOR):
+        if ensure_tab_active(che_tao_bright_img, che_tao_dark_img, "Chế tạo", MONITOR):
             time.sleep(0.3)
-            # Tìm Vật tư y tế (bản Craft); nếu chưa thấy thì bấm Ẩn công thức không thể chế tạo rồi tìm lại
-            if find_and_click(craft_vattu_img, MONITOR, threshold=THRESHOLD):
-                print(f"[{time.strftime('%H:%M:%S')}] [>] Đã chọn: Vật tư y tế (Craft)")
-            else:
-                print(f"[{time.strftime('%H:%M:%S')}] [*] Chưa thấy Vật tư y tế, bấm Ẩn công thức không thể chế tạo...")
-                if wait_and_click_step(hide_uncraftable_img, MONITOR, "Ẩn công thức không thể chế tạo", timeout=3):
-                    time.sleep(0.4)
-                    wait_and_click_step(craft_vattu_img, MONITOR, "Vật tư y tế (Craft)", timeout=3)
-            
-            time.sleep(0.4)
-            # Bước Set 8: Nếu số mặc định không khớp craft_input_box thì bấm nút TỐI ĐA rồi nhập lại 8
-            if find_and_click(craft_input_box, MONITOR, threshold=THRESHOLD):
-                print(f"[{time.strftime('%H:%M:%S')}] [>] Đã chọn ô nhập số lượng mặc định, nhập 8...")
-                time.sleep(0.2)
-                pyautogui.hotkey('ctrl', 'a')
-                time.sleep(0.05)
-                pyautogui.press('backspace')
-                pyautogui.write('8')
+            if ensure_tab_active(material_bright_img, material_dark_img, "Material", MONITOR):
                 time.sleep(0.3)
-            else:
-                print(f"[{time.strftime('%H:%M:%S')}] [*] Số mặc định khác mẫu, bấm nút TỐI ĐA...")
-                clicked_max, max_rect = find_and_click_with_rect(max_btn_img, MONITOR, threshold=THRESHOLD)
-                if clicked_max:
-                    print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm TỐI ĐA, tiến hành nhập lại 8...")
-                    time.sleep(0.25)
-                    # Click vào ô nhập số nằm ngay bên trái nút TỐI ĐA
-                    mx, my, mw, mh = max_rect
-                    input_x = max(10, mx - 45 + random.randint(-10, 10))
-                    input_y = my + (mh // 2) + random.randint(-mh // 4, mh // 4)
-                    
-                    move_mouse_bezier(input_x, input_y, duration=random.uniform(0.15, 0.25))
-                    time.sleep(random.uniform(0.02, 0.05))
-                    pyautogui.mouseDown(_pause=False)
-                    pyautogui.moveTo(input_x + random.choice([-1, 1]), input_y + random.choice([-1, 1]), duration=0.02, _pause=False)
-                    pyautogui.mouseUp(_pause=False)
-                    
+                if find_and_click(craft_vattu_img, MONITOR, threshold=THRESHOLD):
+                    print(f"[{time.strftime('%H:%M:%S')}] [>] Đã chọn: Vật tư y tế (Craft)")
+                else:
+                    print(f"[{time.strftime('%H:%M:%S')}] [*] Chưa thấy Vật tư y tế, bấm Ẩn công thức không thể chế tạo...")
+                    if wait_and_click_step(hide_uncraftable_img, MONITOR, "Ẩn công thức không thể chế tạo", timeout=3):
+                        time.sleep(0.4)
+                        wait_and_click_step(craft_vattu_img, MONITOR, "Vật tư y tế (Craft)", timeout=3)
+                
+                time.sleep(0.4)
+                # Bước Set 8: Nếu số mặc định không khớp craft_input_box thì bấm nút TỐI ĐA rồi nhập lại 8
+                if find_and_click(craft_input_box, MONITOR, threshold=THRESHOLD):
+                    print(f"[{time.strftime('%H:%M:%S')}] [>] Đã chọn ô nhập số lượng mặc định, nhập 8...")
                     time.sleep(0.2)
                     pyautogui.hotkey('ctrl', 'a')
                     time.sleep(0.05)
@@ -307,22 +293,40 @@ def execute_post_craft_sequence(inventory_img, material_bright_img, material_dar
                     pyautogui.write('8')
                     time.sleep(0.3)
                 else:
-                    print(f"[{time.strftime('%H:%M:%S')}] [!] Không tìm thấy ô nhập số lẫn nút TỐI ĐA.")
+                    print(f"[{time.strftime('%H:%M:%S')}] [*] Số mặc định khác mẫu, bấm nút TỐI ĐA...")
+                    clicked_max, max_rect = find_and_click_with_rect(max_btn_img, MONITOR, threshold=THRESHOLD)
+                    if clicked_max:
+                        print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm TỐI ĐA, tiến hành nhập lại 8...")
+                        time.sleep(0.25)
+                        mx, my, mw, mh = max_rect
+                        input_x = max(10, mx - 45 + random.randint(-10, 10))
+                        input_y = my + (mh // 2) + random.randint(-mh // 4, mh // 4)
+                        
+                        move_mouse_bezier(input_x, input_y, duration=random.uniform(0.15, 0.25))
+                        time.sleep(random.uniform(0.02, 0.05))
+                        pyautogui.mouseDown(_pause=False)
+                        pyautogui.moveTo(input_x + random.choice([-1, 1]), input_y + random.choice([-1, 1]), duration=0.02, _pause=False)
+                        pyautogui.mouseUp(_pause=False)
+                        
+                        time.sleep(0.2)
+                        pyautogui.hotkey('ctrl', 'a')
+                        time.sleep(0.05)
+                        pyautogui.press('backspace')
+                        pyautogui.write('8')
+                        time.sleep(0.3)
+                    else:
+                        print(f"[{time.strftime('%H:%M:%S')}] [!] Không tìm thấy ô nhập số lẫn nút TỐI ĐA.")
 
-            if wait_and_click_step(confirm_img, MONITOR, "Nút bắt đầu", timeout=3):
-                time.sleep(0.8)
-                if find_and_click(claim_img, MONITOR, threshold=THRESHOLD):
-                    print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm Claim vật tư y tế.")
-                    time.sleep(0.5)
-                
-                if wait_and_click_step(map_img, MONITOR, "Bản đồ", timeout=3):
-                    time.sleep(0.8)
-                    if not check_exists(tap_doan_img, MONITOR, threshold=THRESHOLD):
-                        human_scroll(-800)
-                        time.sleep(0.5)
-                    wait_and_click_step(tap_doan_img, MONITOR, "Nút Tập đoàn", timeout=3)
-                    time.sleep(0.8)
-                    print(f"[{time.strftime('%H:%M:%S')}] [V] Hoàn tất chuyển vòng! Tiếp tục chu kỳ Rã mới...\n")
+                if wait_and_click_step(confirm_img, MONITOR, "Nút bắt đầu", timeout=3):
+                    time.sleep(0.6)
+                    if wait_and_click_step(map_img, MONITOR, "Bản đồ", timeout=4):
+                        time.sleep(0.8)
+                        if not check_exists(tap_doan_img, MONITOR, threshold=THRESHOLD):
+                            human_scroll(-800)
+                            time.sleep(0.5)
+                        wait_and_click_step(tap_doan_img, MONITOR, "Nút Tập đoàn", timeout=4)
+                        time.sleep(0.8)
+                        print(f"[{time.strftime('%H:%M:%S')}] [V] Hoàn tất chuyển vòng! Tiếp tục chu kỳ Rã mới...\n")
 
 def main():
     global is_paused
@@ -361,7 +365,6 @@ def main():
     back_after_claim = False
     post_craft_after_claim = False
     need_enter_tapdoan = True
-    last_combo_action_time = 0
     
     if choice == '1':
         task_img = load_image('scav_btn.png')
@@ -450,6 +453,8 @@ def main():
         confirm_img = load_image('start_btn.png')
 
         inventory_img = load_image('inventory_btn.png') if os.path.exists('inventory_btn.png') else load_image('balo_btn.png')
+        che_tao_bright_img = load_image('che_tao_bright.png')
+        che_tao_dark_img = load_image('che_tao_dark.png')
         material_bright_img = load_image('material_bright.png')
         material_dark_img = load_image('material_dark.png')
         hide_uncraftable_img = load_image('hide_uncraftable_btn.png')
@@ -481,7 +486,7 @@ def main():
             if find_and_click(claim_img, MONITOR, threshold=THRESHOLD):
                 print(f"[{time.strftime('%H:%M:%S')}] [+] Đã bấm Claim/Nhận thưởng, đang kiểm tra...")
                 waiting_for_claim = False
-                time.sleep(0.3) 
+                time.sleep(0.5) 
                 
                 if check_exists(full_img, MONITOR, threshold=THRESHOLD):
                     print("\n" + "!"*50)
@@ -495,18 +500,19 @@ def main():
                 if choice == '10' and back_after_claim:
                     back_after_claim = False
                     time.sleep(0.5)
-                    wait_and_click_step(back_city_img, MONITOR, "Trở Lại Trung Tâm", timeout=3)
+                    wait_and_click_step(back_city_img, MONITOR, "Trở Lại Trung Tâm", timeout=4)
                     time.sleep(0.8)
                     continue
 
-                # Chạy tiến trình Túi đồ (Inventory) -> Material -> Vật tư y tế -> Set 8 -> Bắt đầu -> Bản đồ -> Tập đoàn sau lượt Craft thứ 4
+                # Chạy tiến trình Túi đồ -> Chế tạo -> Material -> Vật tư y tế (Set 8) -> Bắt đầu -> Bản đồ -> Tập đoàn sau khi Claim xong lượt Craft 4/4
                 if choice == '10' and post_craft_after_claim:
                     post_craft_after_claim = False
                     time.sleep(0.5)
                     execute_post_craft_sequence(
-                        inventory_img, material_bright_img, material_dark_img,
+                        inventory_img, che_tao_bright_img, che_tao_dark_img,
+                        material_bright_img, material_dark_img,
                         craft_vattu_img, hide_uncraftable_img, craft_input_box,
-                        max_btn_img, confirm_img, claim_img, map_img, tap_doan_img
+                        max_btn_img, confirm_img, map_img, tap_doan_img
                     )
                     continue
                 
@@ -583,27 +589,11 @@ def main():
                     print(f"[{time.strftime('%H:%M:%S')}] [V] Đã bấm Start chế tạo Túi cũ! Đang chờ Claim...")
                     time.sleep(0.5)
 
-            # --- XỬ LÝ CHẾ ĐỘ 10 (COMBO LIÊN HOÀN KHÔNG TẠM DỪNG) ---
+            # --- XỬ LÝ CHẾ ĐỘ 10 (COMBO LIÊN HOÀN) ---
             elif choice == '10':
                 if waiting_for_claim:
-                    if time.time() - last_combo_action_time > 45:
-                        waiting_for_claim = False
-                        if back_after_claim:
-                            back_after_claim = False
-                            wait_and_click_step(back_city_img, MONITOR, "Trở Lại Trung Tâm", timeout=3)
-                            time.sleep(0.8)
-                            continue
-                        if post_craft_after_claim:
-                            post_craft_after_claim = False
-                            execute_post_craft_sequence(
-                                inventory_img, material_bright_img, material_dark_img,
-                                craft_vattu_img, hide_uncraftable_img, craft_input_box,
-                                max_btn_img, confirm_img, claim_img, map_img, tap_doan_img
-                            )
-                            continue
-                    else:
-                        time.sleep(0.3)
-                        continue
+                    time.sleep(0.3)
+                    continue
 
                 if combo_stage == "RECYCLE":
                     if need_enter_tapdoan:
@@ -618,7 +608,6 @@ def main():
                     if execute_recycle_once(tc_auto, tc_plus, tc_vattu, tc_input, tc_xacnhan, tc_confirm):
                         combo_count += 1
                         waiting_for_claim = True
-                        last_combo_action_time = time.time()
                         print(f"[{time.strftime('%H:%M:%S')}] [V] Tiến độ Rã: {combo_count}/{RECYCLE_TARGET}")
                         
                         if combo_count >= RECYCLE_TARGET:
@@ -632,7 +621,6 @@ def main():
                     if execute_craft_bag_once(lee_shop_img, old_bag_img, confirm_img):
                         combo_count += 1
                         waiting_for_claim = True
-                        last_combo_action_time = time.time()
                         print(f"[{time.strftime('%H:%M:%S')}] [V] Tiến độ Craft Balo: {combo_count}/{CRAFT_TARGET}")
                         
                         if combo_count >= CRAFT_TARGET:
