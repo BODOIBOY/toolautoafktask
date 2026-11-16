@@ -113,38 +113,6 @@ def find_and_click(template, monitor_region, threshold=0.85):
             return True
     return False
 
-def find_and_click_with_rect(template, monitor_region, threshold=0.85):
-    """Tìm, click vào ảnh và trả về kèm tọa độ khung (x, y, w, h) trên màn hình."""
-    with mss.mss() as sct:
-        img = np.array(sct.grab(monitor_region))
-        frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR) if img.shape[2] == 4 else img
-        temp = cv2.cvtColor(template, cv2.COLOR_BGRA2BGR) if template.shape[2] == 4 else template
-            
-        result = cv2.matchTemplate(frame, temp, cv2.TM_CCOEFF_NORMED)
-        loc = np.where(result >= threshold)
-        
-        for pt in zip(*loc[::-1]):
-            h, w = temp.shape[:2]
-            screen_x = monitor_region["left"] + pt[0]
-            screen_y = monitor_region["top"] + pt[1]
-            
-            offset_x = random.randint(-w // 4, w // 4)
-            offset_y = random.randint(-h // 4, h // 4)
-            target_x = screen_x + (w // 2) + offset_x
-            target_y = screen_y + (h // 2) + offset_y
-            
-            move_mouse_bezier(target_x, target_y, duration=random.uniform(0.15, 0.25))
-            time.sleep(random.uniform(0.02, 0.05))
-            
-            pyautogui.mouseDown(_pause=False)
-            rung_x = random.choice([-1, 1])
-            rung_y = random.choice([-1, 1])
-            pyautogui.moveTo(target_x + rung_x, target_y + rung_y, duration=0.02, _pause=False)
-            pyautogui.mouseUp(_pause=False)
-            
-            return True, (screen_x, screen_y, w, h)
-    return False, None
-
 def check_exists(template, monitor_region, threshold=0.85):
     with mss.mss() as sct:
         img = np.array(sct.grab(monitor_region))
@@ -266,7 +234,7 @@ def execute_craft_bag_once(lee_shop_img, old_bag_img, confirm_img):
     return False
 
 def execute_post_craft_sequence(inventory_img, che_tao_bright_img, che_tao_dark_img, material_bright_img, material_dark_img, craft_vattu_img, hide_uncraftable_img, craft_input_box, max_btn_img, confirm_img, map_img, tap_doan_img):
-    """Chuỗi sau 4 lần Craft: Túi đồ (Inventory) -> Chế tạo -> Material -> Vật tư y tế (Set 8) -> Bắt đầu -> Bản đồ -> Tập đoàn"""
+    """Chuỗi sau 4 lần Craft: Túi đồ (Inventory) -> Chế tạo -> Material -> Vật tư y tế (Set 8) -> Bắt đầu -> Bản đồ -> Cuộn chuột -> Tập đoàn"""
     print(f"\n[{time.strftime('%H:%M:%S')}] [*] Chạy tiến trình sau 4 lần Craft...")
     if wait_and_click_step(inventory_img, MONITOR, "Túi đồ (Inventory)", timeout=4):
         time.sleep(0.5)
@@ -283,47 +251,37 @@ def execute_post_craft_sequence(inventory_img, che_tao_bright_img, che_tao_dark_
                         wait_and_click_step(craft_vattu_img, MONITOR, "Vật tư y tế (Craft)", timeout=3)
                 
                 time.sleep(0.4)
-                # Bước Set 8: Nếu số mặc định không khớp craft_input_box thì bấm nút TỐI ĐA rồi nhập lại 8
+                # Bước Set 8: Nếu đã hiện sẵn số Max giống craft_input_box thì bấm nhập 8 luôn;
+                # nếu khác thì bấm nút TỐI ĐA, chờ đủ thời gian chuyển tiếp (0.6s) rồi mới bấm craft_input_box để nhập 8
                 if find_and_click(craft_input_box, MONITOR, threshold=THRESHOLD):
-                    print(f"[{time.strftime('%H:%M:%S')}] [>] Đã chọn ô nhập số lượng mặc định, nhập 8...")
-                    time.sleep(0.2)
+                    print(f"[{time.strftime('%H:%M:%S')}] [>] Đã chọn ô nhập số lượng, nhập 8...")
+                    time.sleep(0.25)
                     pyautogui.hotkey('ctrl', 'a')
-                    time.sleep(0.05)
+                    time.sleep(0.08)
                     pyautogui.press('backspace')
-                    pyautogui.write('8')
+                    time.sleep(0.08)
+                    pyautogui.write('8', interval=0.05)
                     time.sleep(0.3)
                 else:
-                    print(f"[{time.strftime('%H:%M:%S')}] [*] Số mặc định khác mẫu, bấm nút TỐI ĐA...")
-                    clicked_max, max_rect = find_and_click_with_rect(max_btn_img, MONITOR, threshold=THRESHOLD)
-                    if clicked_max:
-                        print(f"[{time.strftime('%H:%M:%S')}] [>] Đã bấm TỐI ĐA, tiến hành nhập lại 8...")
-                        time.sleep(0.25)
-                        mx, my, mw, mh = max_rect
-                        input_x = max(10, mx - 45 + random.randint(-10, 10))
-                        input_y = my + (mh // 2) + random.randint(-mh // 4, mh // 4)
-                        
-                        move_mouse_bezier(input_x, input_y, duration=random.uniform(0.15, 0.25))
-                        time.sleep(random.uniform(0.02, 0.05))
-                        pyautogui.mouseDown(_pause=False)
-                        pyautogui.moveTo(input_x + random.choice([-1, 1]), input_y + random.choice([-1, 1]), duration=0.02, _pause=False)
-                        pyautogui.mouseUp(_pause=False)
-                        
-                        time.sleep(0.2)
-                        pyautogui.hotkey('ctrl', 'a')
-                        time.sleep(0.05)
-                        pyautogui.press('backspace')
-                        pyautogui.write('8')
-                        time.sleep(0.3)
-                    else:
-                        print(f"[{time.strftime('%H:%M:%S')}] [!] Không tìm thấy ô nhập số lẫn nút TỐI ĐA.")
+                    print(f"[{time.strftime('%H:%M:%S')}] [*] Số khác mẫu, bấm nút TỐI ĐA...")
+                    if find_and_click(max_btn_img, MONITOR, threshold=THRESHOLD):
+                        time.sleep(0.6)
+                        if wait_and_click_step(craft_input_box, MONITOR, "Ô nhập số (sau TỐI ĐA)", timeout=3):
+                            time.sleep(0.25)
+                            pyautogui.hotkey('ctrl', 'a')
+                            time.sleep(0.08)
+                            pyautogui.press('backspace')
+                            time.sleep(0.08)
+                            pyautogui.write('8', interval=0.05)
+                            time.sleep(0.3)
 
                 if wait_and_click_step(confirm_img, MONITOR, "Nút bắt đầu", timeout=3):
                     time.sleep(0.6)
                     if wait_and_click_step(map_img, MONITOR, "Bản đồ", timeout=4):
                         time.sleep(0.8)
-                        if not check_exists(tap_doan_img, MONITOR, threshold=THRESHOLD):
-                            human_scroll(-800)
-                            time.sleep(0.5)
+                        print(f"[{time.strftime('%H:%M:%S')}] [*] Cuộn chuột 1 lần tìm nút Tập đoàn...")
+                        human_scroll(-800)
+                        time.sleep(0.6)
                         wait_and_click_step(tap_doan_img, MONITOR, "Nút Tập đoàn", timeout=4)
                         time.sleep(0.8)
                         print(f"[{time.strftime('%H:%M:%S')}] [V] Hoàn tất chuyển vòng! Tiếp tục chu kỳ Rã mới...\n")
@@ -504,7 +462,7 @@ def main():
                     time.sleep(0.8)
                     continue
 
-                # Chạy tiến trình Túi đồ -> Chế tạo -> Material -> Vật tư y tế (Set 8) -> Bắt đầu -> Bản đồ -> Tập đoàn sau khi Claim xong lượt Craft 4/4
+                # Chạy tiến trình Túi đồ -> Chế tạo -> Material -> Vật tư y tế (Set 8) -> Bắt đầu -> Bản đồ -> Cuộn chuột -> Tập đoàn sau khi Claim xong lượt Craft 4/4
                 if choice == '10' and post_craft_after_claim:
                     post_craft_after_claim = False
                     time.sleep(0.5)
@@ -592,7 +550,7 @@ def main():
             # --- XỬ LÝ CHẾ ĐỘ 10 (COMBO LIÊN HOÀN) ---
             elif choice == '10':
                 if waiting_for_claim:
-                    time.sleep(0.3)
+                    time.sleep(1.5)
                     continue
 
                 if combo_stage == "RECYCLE":
